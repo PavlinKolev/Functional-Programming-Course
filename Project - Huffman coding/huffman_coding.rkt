@@ -25,12 +25,12 @@
 )
 
 ;creates the pair (elem.count), which represent how many times elem is met in llist
-(define (pair llist elem result)
+(define (pair llist elem result cond?)
     (let ((incr_count (cons elem (1+ (cdr result))))
          )
         (cond ((null? llist) result)
-              ((= (car llist) elem) (pair (cdr llist) elem incr_count))
-              (else (pair (cdr llist) elem result))
+              ((cond? (car llist) elem) (pair (cdr llist) elem incr_count cond?))
+              (else (pair (cdr llist) elem result cond?))
         )
     )
 )
@@ -39,7 +39,7 @@
 ;pair: (x.y) where y is the count of x in llist
 (define (make_pairs llist cond?)
     (if (null? llist) llist
-        (let ((first_pair (pair (cdr llist) (car llist)  (cons (car llist) 1)))
+        (let ((first_pair (pair (cdr llist) (car llist)  (cons (car llist) 1) cond?))
               (tail_pairs (make_pairs (remove (car llist) (cdr llist) cond?) cond?))
              )
             (cons  first_pair tail_pairs)
@@ -118,30 +118,30 @@
     )
 )
 
-(define (encoding_table tree)
+(define (encoding_table tree); return list of elements (path.elem) where path is the the path for elem in huffman tree
     (define (helper tree path)
-        (cond ((null? tree) '())
+        (cond ((null? tree) "")
               ((leaf? tree) (list (cons path (value_from_leaf tree))))
-              (else (append (helper (left_tree tree) (append path (list 0)))
-                            (helper (right_tree tree) (append path (list 1)))
+              (else (append (helper (left_tree tree) (string-append path "0"))
+                            (helper (right_tree tree) (string-append path "1"))
                     ))
         )
     )
-    (if (leaf? tree) (list (cons '(1) (value_from_leaf tree)))
-        (helper tree '())
+    (if (leaf? tree) (list (cons "1" (value_from_leaf tree)))
+        (helper tree "")
     )
 )
 
 (define (encode llist cond?)
-    (define (get_code table elem)
+    (define (get_code table elem) ;returns the code-string for elem
         (cond ((null? table) (error "No such element in table."))
-              ((= (cdar table) elem) (caar table))
+              ((cond? (cdar table) elem) (caar table))
               (else (get_code (cdr table) elem))
         )
     )
-    (define (encode_with_table table llist)
-        (if (null? llist) '()
-            (append (get_code table (car llist)) (encode_with_table table (cdr llist)))
+    (define (encode_with_table table llist);returns the wanted encoded string for llist
+        (if (null? llist) ""
+            (string-append (get_code table (car llist)) (encode_with_table table (cdr llist)))
         )
     )
     (let* ((tree (huffman_tree llist cond?))
@@ -152,26 +152,47 @@
     )
 )
 
+
+(define (empty_str? str) (equal? str ""))
+(define (head_str str) (substring str 0 1))
+(define (tail_str str) (substring str 1 (string-length str)))
+
 (define (decode encoded tree)
-    (define (one_symbol_list symbol llist) ;creates list that contains only symbols, with length of llist
-        (if (null? llist) '()
-            (cons symbol (one_symbol_list symbol (cdr llist)))
+    (define (one_symbol_list symbol encoded) ;creates list that contains only symbols, with length of llist
+        (if (empty_str? encoded) '()
+            (cons symbol (one_symbol_list symbol (tail_str encoded)))
         )
     )
     (define (decode_tree encoded tree)
         (define origin_tree tree)
         (define (decode_helper encoded tree)
-            (cond ((null? encoded) (if (leaf? tree) (list (value_from_leaf tree)) '()))
+            (cond ((empty_str? encoded) (if (leaf? tree) (list (value_from_leaf tree)) '()))
                   ((leaf? tree) (cons (value_from_leaf tree) (decode_helper encoded origin_tree)))
-                  ((= (car encoded) 1) (decode_helper (cdr encoded) (right_tree tree)))
-                  (else (decode_helper (cdr encoded) (left_tree tree))) ; (=(car encoed) 0)
+                  ((equal? (head_str encoded) "1") (decode_helper (tail_str encoded) (right_tree tree)))
+                  (else (decode_helper (tail_str encoded) (left_tree tree))) ; (equal? (head_str encoed) "0")
             )
         )
         (decode_helper encoded tree)
     )
-    (cond ((null? encoded) '())
+    (cond ((empty_str? encoded) '())
           ((leaf? tree) (one_symbol_list (value_from_leaf tree) encoded))
           (else (decode_tree encoded tree))
     )
 )
 
+
+(define l1 '(1 2 3 4 5 6))
+(define l2 '(2 2 2 3 3 2 7 8 9 2))
+(define l3 '("FP" "FP" "scheme" "haskell" "FP"))
+(define l4 '("Functional" "programming" "scheme"))
+
+
+(define e1 (encode l1 =))
+(define e2 (encode l2 =))
+(define e3 (encode l3 equal?))
+(define e4 (encode l4 equal?))
+
+(define d1 (decode (car e1) (cdr e1)))
+(define d2 (decode (car e2) (cdr e2)))
+(define d3 (decode (car e3) (cdr e3)))
+(define d4 (decode (car e4) (cdr e4)))
